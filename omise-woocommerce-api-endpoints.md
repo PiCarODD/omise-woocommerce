@@ -252,25 +252,54 @@ This document lists all the API endpoints used by Omise in WooCommerce integrati
 
 ## 14. WooCommerce-Specific Endpoints
 
-### Webhook Endpoints (Your Site)
-- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/omise/v1/webhook`
-  - Webhook endpoint for receiving payment notifications
+### Standard WooCommerce REST API Endpoints
+- **GET** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/wc/v3/orders`
+  - Alternative: `https://localhost:4433/wordpress-6.8.1/wordpress/index.php?rest_route=/wc/v3/orders`
+  - List orders
 
-### Payment Callback/Return URLs
-- **GET** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/omise/v1/callback/{order_id}`
-  - Return URL after 3DS authentication or external payment
+- **GET** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/wc/v3/orders/{order_id}`
+  - Alternative: `https://localhost:4433/wordpress-6.8.1/wordpress/index.php?rest_route=/wc/v3/orders/{order_id}`
+  - Get specific order details
 
-### Order Status Updates
-- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/omise/v1/order/{order_id}/update`
-  - Update WooCommerce order status
+- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/wc/v3/orders/{order_id}`
+  - Alternative: `https://localhost:4433/wordpress-6.8.1/wordpress/index.php?rest_route=/wc/v3/orders/{order_id}`
+  - Update order status
 
-### Payment Processing
-- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/omise/v1/process-payment`
-  - Process payments from checkout
+- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/wc/v3/orders/{order_id}/refunds`
+  - Alternative: `https://localhost:4433/wordpress-6.8.1/wordpress/index.php?rest_route=/wc/v3/orders/{order_id}/refunds`
+  - Create refunds
 
-### Refund Processing
-- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/omise/v1/refund/{order_id}`
-  - Process refunds from admin
+### Omise Plugin Webhook Endpoints
+- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/?wc-api=omise_webhook`
+  - Main webhook endpoint for Omise notifications (legacy format)
+
+- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wc-api/omise_webhook`
+  - Alternative webhook endpoint format
+
+### Payment Return/Callback URLs
+- **GET** `https://localhost:4433/wordpress-6.8.1/wordpress/?wc-api=omise_callback&order_id={order_id}`
+  - Return URL after 3DS authentication or redirect payments
+
+- **GET** `https://localhost:4433/wordpress-6.8.1/wordpress/checkout/order-received/{order_id}/?key={order_key}`
+  - WooCommerce order confirmation page
+
+### Omise Payment Processing (AJAX)
+- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-admin/admin-ajax.php`
+  - Action: `omise_create_token` - Create secure token
+  - Action: `omise_process_payment` - Process payment
+  - Action: `omise_create_source` - Create payment source
+
+### Order Status and Notes
+- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/wp-admin/admin-ajax.php`
+  - Action: `omise_sync_order_status` - Sync payment status
+  - Action: `omise_manual_sync` - Manual payment sync
+
+### WooCommerce Checkout Endpoints
+- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/?wc-ajax=checkout`
+  - Process checkout form submission
+
+- **POST** `https://localhost:4433/wordpress-6.8.1/wordpress/?wc-ajax=update_order_review`
+  - Update order review during checkout
 
 ---
 
@@ -309,6 +338,7 @@ This document lists all the API endpoints used by Omise in WooCommerce integrati
 
 ## 16. Authentication Headers
 
+### Omise API Authentication
 All API requests to `https://api.omise.co` require:
 
 ```http
@@ -322,6 +352,34 @@ For vault requests to `https://vault.omise.co`:
 ```http
 Authorization: Basic {base64(public_key:)}
 Content-Type: application/json
+```
+
+### WooCommerce REST API Authentication
+For WooCommerce REST API endpoints, you need:
+
+1. **Consumer Key and Consumer Secret** (generated in WooCommerce > Settings > Advanced > REST API)
+
+```http
+Authorization: Basic {base64(consumer_key:consumer_secret)}
+Content-Type: application/json
+```
+
+2. **Alternative Query Parameters:**
+```
+https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/wc/v3/orders?consumer_key=ck_xxx&consumer_secret=cs_xxx
+```
+
+### WordPress AJAX Authentication
+For AJAX requests to `admin-ajax.php`:
+
+```http
+Content-Type: application/x-www-form-urlencoded
+X-Requested-With: XMLHttpRequest
+```
+
+Include nonce for security:
+```
+action=omise_process_payment&nonce={wp_nonce}
 ```
 
 ---
@@ -386,6 +444,65 @@ Use Omise test card numbers for development:
 
 ---
 
+## 20. Troubleshooting & Setup Guide
+
+### Fixing 500 Internal Server Errors
+
+1. **Check Pretty Permalinks:**
+   - Go to WordPress Admin > Settings > Permalinks
+   - Ensure permalinks are set to "Post name" or custom structure
+   - If disabled, use `index.php?rest_route=` format
+
+2. **Enable WooCommerce REST API:**
+   - Go to WooCommerce > Settings > Advanced > REST API
+   - Add New API Key
+   - Generate Consumer Key and Consumer Secret
+
+3. **Verify Omise Plugin Installation:**
+   - Ensure Omise WooCommerce plugin is installed and activated
+   - Check plugin version (use latest v6.2.1 or newer)
+   - Verify Omise API keys are configured
+
+4. **Test Endpoints:**
+   ```bash
+   # Test WooCommerce API
+   curl -u consumer_key:consumer_secret \
+     https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/wc/v3/orders
+   
+   # Alternative format
+   curl https://localhost:4433/wordpress-6.8.1/wordpress/index.php?rest_route=/wc/v3/orders \
+     -u consumer_key:consumer_secret
+   ```
+
+5. **Check WordPress REST API:**
+   ```bash
+   # Basic WordPress API test
+   curl https://localhost:4433/wordpress-6.8.1/wordpress/wp-json/
+   ```
+
+6. **Debug Mode:**
+   - Add to `wp-config.php`:
+   ```php
+   define('WP_DEBUG', true);
+   define('WP_DEBUG_LOG', true);
+   ```
+   - Check `/wp-content/debug.log` for errors
+
+### Webhook Setup for Omise
+
+1. **Configure in Omise Dashboard:**
+   - Test Mode: `https://localhost:4433/wordpress-6.8.1/wordpress/?wc-api=omise_webhook`
+   - Live Mode: `https://yourdomain.com/?wc-api=omise_webhook`
+
+2. **Verify Webhook Endpoint:**
+   ```bash
+   curl -X POST https://localhost:4433/wordpress-6.8.1/wordpress/?wc-api=omise_webhook \
+     -H "Content-Type: application/json" \
+     -d '{"test": "webhook"}'
+   ```
+
+---
+
 ## Notes
 
 1. Always use HTTPS for all API communications
@@ -395,5 +512,8 @@ Use Omise test card numbers for development:
 5. Implement idempotency for critical operations
 6. Follow PCI DSS guidelines when handling card data
 7. Test thoroughly in sandbox mode before going live
+8. **For latest WordPress/WooCommerce**: Always check if pretty permalinks are enabled
+9. **Use `index.php?rest_route=` format** if pretty permalinks are disabled
+10. **Generate WooCommerce API keys** in WooCommerce > Settings > Advanced > REST API
 
-This comprehensive list covers all the major API endpoints used by Omise in WooCommerce integration. The endpoints are customized for your local WordPress development environment.
+This comprehensive list covers all the major API endpoints used by Omise in WooCommerce integration. The endpoints are updated for the latest WordPress/WooCommerce versions and include troubleshooting guidance.
